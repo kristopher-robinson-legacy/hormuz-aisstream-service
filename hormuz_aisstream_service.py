@@ -46,6 +46,7 @@ def _build_config() -> MonitorConfig:
         max_course_deg=float(os.getenv("HORMUZ_MAX_COURSE_DEG", "135.0")),
         log_every_messages=int(os.getenv("HORMUZ_LOG_EVERY_MESSAGES", "500")),
         reconnect_wait_seconds=int(os.getenv("HORMUZ_RECONNECT_WAIT_SECONDS", "5")),
+        connect_timeout_seconds=int(os.getenv("HORMUZ_CONNECT_TIMEOUT_SECONDS", "20")),
         filter_message_types=None,
     )
 

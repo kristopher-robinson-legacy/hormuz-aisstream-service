@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import socket
 import os
 import time
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ class MonitorConfig:
     max_course_deg: float
     log_every_messages: int
     reconnect_wait_seconds: int
+    connect_timeout_seconds: int
     filter_message_types: list[str] | None
 
 
@@ -243,9 +245,37 @@ class HormuzAisStreamMonitor:
         runtime["loop_status"] = "starting"
         save_state(self.config.state_file, self.state)
         while self.running:
+            socket.setdefaulttimeout(max(1, int(self.config.connect_timeout_seconds)))
             runtime["loop_status"] = "connecting"
+            runtime["connect_timeout_seconds"] = int(self.config.connect_timeout_seconds)
             save_state(self.config.state_file, self.state)
             try:
+                runtime["loop_status"] = "resolving_dns"
+                runtime["last_dns_resolve_utc"] = now_utc_iso()
+                try:
+                    infos = socket.getaddrinfo("stream.aisstream.io", 443, type=socket.SOCK_STREAM)
+                    if infos:
+                        runtime["last_dns_result"] = infos[0][4][0]
+                except Exception as dns_exc:
+                    stats = self.state.setdefault("stats", {})
+                    stats["ws_errors"] = int(stats.get("ws_errors", 0)) + 1
+                    runtime["last_error_utc"] = now_utc_iso()
+                    runtime["last_error"] = f"dns_resolution_failed: {dns_exc}"
+                    save_state(self.config.state_file, self.state)
+                    print(f"[{now_utc_iso()}] Erro DNS: {dns_exc}")
+                    self.state["stats"]["reconnections"] = int(
+                        self.state.get("stats", {}).get("reconnections", 0)
+                    ) + 1
+                    runtime["loop_status"] = "sleeping"
+                    save_state(self.config.state_file, self.state)
+                    print(
+                        f"[{now_utc_iso()}] Reconectando em "
+                        f"{self.config.reconnect_wait_seconds}s..."
+                    )
+                    time.sleep(self.config.reconnect_wait_seconds)
+                    continue
+                runtime["loop_status"] = "opening_ws"
+                save_state(self.config.state_file, self.state)
                 self._run_single_connection()
             except Exception as exc:
                 stats = self.state.setdefault("stats", {})
@@ -507,6 +537,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-course-deg", type=float, default=135.0)
     parser.add_argument("--log-every-messages", type=int, default=500)
     parser.add_argument("--reconnect-wait-seconds", type=int, default=5)
+    parser.add_argument("--connect-timeout-seconds", type=int, default=20)
     parser.add_argument(
         "--filter-message-type",
         action="append",
@@ -541,6 +572,7 @@ def main() -> int:
         max_course_deg=args.max_course_deg,
         log_every_messages=max(1, args.log_every_messages),
         reconnect_wait_seconds=max(1, args.reconnect_wait_seconds),
+        connect_timeout_seconds=max(1, args.connect_timeout_seconds),
         filter_message_types=(args.filter_message_type or None),
     )
     monitor = HormuzAisStreamMonitor(cfg)

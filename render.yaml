@@ -25,3 +25,7 @@ services:
         value: "45.0"
       - key: HORMUZ_MAX_COURSE_DEG
         value: "135.0"
+      - key: HORMUZ_RECONNECT_WAIT_SECONDS
+        value: "60"
+      - key: HORMUZ_CONNECT_TIMEOUT_SECONDS
+        value: "20"
