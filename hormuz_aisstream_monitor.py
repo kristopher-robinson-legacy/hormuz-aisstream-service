@@ -238,11 +238,26 @@ class HormuzAisStreamMonitor:
             f"{self.config.bbox.min_lat},{self.config.bbox.min_lon} -> "
             f"{self.config.bbox.max_lat},{self.config.bbox.max_lon}"
         )
+        runtime = self.state.setdefault("runtime", {})
+        runtime["monitor_boot_utc"] = now_utc_iso()
+        runtime["loop_status"] = "starting"
+        save_state(self.config.state_file, self.state)
         while self.running:
-            self._run_single_connection()
+            runtime["loop_status"] = "connecting"
+            save_state(self.config.state_file, self.state)
+            try:
+                self._run_single_connection()
+            except Exception as exc:
+                stats = self.state.setdefault("stats", {})
+                stats["ws_errors"] = int(stats.get("ws_errors", 0)) + 1
+                runtime["last_error_utc"] = now_utc_iso()
+                runtime["last_error"] = f"run_forever_exception: {exc}"
+                save_state(self.config.state_file, self.state)
+                print(f"[{now_utc_iso()}] Excecao no loop WS: {exc}")
             self.state["stats"]["reconnections"] = int(
                 self.state.get("stats", {}).get("reconnections", 0)
             ) + 1
+            runtime["loop_status"] = "sleeping"
             save_state(self.config.state_file, self.state)
             print(
                 f"[{now_utc_iso()}] Conexao encerrada. Reconectando em "

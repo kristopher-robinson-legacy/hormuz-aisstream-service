@@ -119,6 +119,8 @@ def health() -> Any:
             "last_close_utc": runtime.get("last_close_utc"),
             "last_close_code": runtime.get("last_close_code"),
             "last_close_msg": runtime.get("last_close_msg"),
+            "monitor_boot_utc": runtime.get("monitor_boot_utc"),
+            "loop_status": runtime.get("loop_status"),
             "last_error_utc": runtime.get("last_error_utc"),
             "last_error": runtime.get("last_error"),
         }
