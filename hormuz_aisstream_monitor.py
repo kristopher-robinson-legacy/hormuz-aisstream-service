@@ -34,6 +34,7 @@ class MonitorConfig:
     max_course_deg: float
     log_every_messages: int
     reconnect_wait_seconds: int
+    filter_message_types: list[str] | None
 
 
 def now_utc_iso() -> str:
@@ -174,6 +175,17 @@ def build_empty_state() -> dict[str, Any]:
             "static_messages": 0,
             "detections_total": 0,
             "reconnections": 0,
+            "ws_opens": 0,
+            "ws_closes": 0,
+            "ws_errors": 0,
+        },
+        "runtime": {
+            "last_open_utc": None,
+            "last_close_utc": None,
+            "last_close_code": None,
+            "last_close_msg": None,
+            "last_error_utc": None,
+            "last_error": None,
         },
     }
 
@@ -258,15 +270,14 @@ class HormuzAisStreamMonitor:
                     [self.config.bbox.max_lat, self.config.bbox.max_lon],
                 ]
             ],
-            "FilterMessageTypes": [
-                "PositionReport",
-                "StandardClassBPositionReport",
-                "ExtendedClassBPositionReport",
-                "ShipStaticData",
-                "StaticDataReport",
-            ],
         }
+        if self.config.filter_message_types:
+            sub_msg["FilterMessageTypes"] = self.config.filter_message_types
         ws.send(json.dumps(sub_msg))
+        stats = self.state.setdefault("stats", {})
+        stats["ws_opens"] = int(stats.get("ws_opens", 0)) + 1
+        runtime = self.state.setdefault("runtime", {})
+        runtime["last_open_utc"] = now_utc_iso()
         print(f"[{now_utc_iso()}] Conectado ao AISStream e inscricao enviada.")
 
     def _on_message(self, _ws: WebSocketApp, message_raw: str) -> None:
@@ -427,11 +438,24 @@ class HormuzAisStreamMonitor:
         )
 
     def _on_error(self, _ws: WebSocketApp, error: Any) -> None:
+        stats = self.state.setdefault("stats", {})
+        stats["ws_errors"] = int(stats.get("ws_errors", 0)) + 1
+        runtime = self.state.setdefault("runtime", {})
+        runtime["last_error_utc"] = now_utc_iso()
+        runtime["last_error"] = str(error)
+        save_state(self.config.state_file, self.state)
         print(f"[{now_utc_iso()}] WebSocket erro: {error}")
 
     def _on_close(
         self, _ws: WebSocketApp, status_code: int | None, message: str | None
     ) -> None:
+        stats = self.state.setdefault("stats", {})
+        stats["ws_closes"] = int(stats.get("ws_closes", 0)) + 1
+        runtime = self.state.setdefault("runtime", {})
+        runtime["last_close_utc"] = now_utc_iso()
+        runtime["last_close_code"] = status_code
+        runtime["last_close_msg"] = message
+        save_state(self.config.state_file, self.state)
         print(f"[{now_utc_iso()}] WebSocket fechado: code={status_code} msg={message}")
 
 
@@ -468,6 +492,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-course-deg", type=float, default=135.0)
     parser.add_argument("--log-every-messages", type=int, default=500)
     parser.add_argument("--reconnect-wait-seconds", type=int, default=5)
+    parser.add_argument(
+        "--filter-message-type",
+        action="append",
+        default=[],
+        help=(
+            "Filtro opcional de tipo AIS (pode repetir varias vezes). "
+            "Ex.: --filter-message-type PositionReport"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -493,6 +526,7 @@ def main() -> int:
         max_course_deg=args.max_course_deg,
         log_every_messages=max(1, args.log_every_messages),
         reconnect_wait_seconds=max(1, args.reconnect_wait_seconds),
+        filter_message_types=(args.filter_message_type or None),
     )
     monitor = HormuzAisStreamMonitor(cfg)
     monitor.run_forever()

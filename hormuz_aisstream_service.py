@@ -46,6 +46,7 @@ def _build_config() -> MonitorConfig:
         max_course_deg=float(os.getenv("HORMUZ_MAX_COURSE_DEG", "135.0")),
         log_every_messages=int(os.getenv("HORMUZ_LOG_EVERY_MESSAGES", "500")),
         reconnect_wait_seconds=int(os.getenv("HORMUZ_RECONNECT_WAIT_SECONDS", "5")),
+        filter_message_types=None,
     )
 
 
@@ -101,6 +102,7 @@ def health() -> Any:
     _start_monitor_once()
     state = load_state(DEFAULT_STATE_FILE)
     stats = state.get("stats", {}) if isinstance(state, dict) else {}
+    runtime = state.get("runtime", {}) if isinstance(state, dict) else {}
     return jsonify(
         {
             "ok": True,
@@ -109,7 +111,16 @@ def health() -> Any:
             "monitor_error": _monitor_error,
             "last_message_utc": state.get("last_message_utc") if isinstance(state, dict) else None,
             "messages_total": int(stats.get("messages_total", 0)),
+            "ws_opens": int(stats.get("ws_opens", 0)),
+            "ws_closes": int(stats.get("ws_closes", 0)),
+            "ws_errors": int(stats.get("ws_errors", 0)),
             "detections_total": int(stats.get("detections_total", 0)),
+            "last_open_utc": runtime.get("last_open_utc"),
+            "last_close_utc": runtime.get("last_close_utc"),
+            "last_close_code": runtime.get("last_close_code"),
+            "last_close_msg": runtime.get("last_close_msg"),
+            "last_error_utc": runtime.get("last_error_utc"),
+            "last_error": runtime.get("last_error"),
         }
     )
 
