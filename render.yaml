@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: hormuz-aisstream-service
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 1 -k gthread -t 120 -b 0.0.0.0:$PORT hormuz_aisstream_service:app
+    healthCheckPath: /health
+    envVars:
+      - key: AISSTREAM_API_KEY
+        sync: false
+      - key: HORMUZ_MIN_LAT
+        value: "25.80"
+      - key: HORMUZ_MAX_LAT
+        value: "26.70"
+      - key: HORMUZ_MIN_LON
+        value: "56.00"
+      - key: HORMUZ_MAX_LON
+        value: "56.95"
+      - key: HORMUZ_EXIT_LON
+        value: "56.85"
+      - key: HORMUZ_MIN_SPEED_KNOTS
+        value: "2.0"
+      - key: HORMUZ_MIN_COURSE_DEG
+        value: "45.0"
+      - key: HORMUZ_MAX_COURSE_DEG
+        value: "135.0"
